@@ -73,7 +73,7 @@ public interface World {
     public boolean isChunkLoaded(Chunk chunk);
 
     /**
-     * Checks loads the specified chunk
+     * loads the specified chunk
      *
      */
     public void loadChunk(Chunk chunk);
