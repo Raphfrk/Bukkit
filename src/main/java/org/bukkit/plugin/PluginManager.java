@@ -76,6 +76,38 @@ public interface PluginManager {
     public Plugin[] loadPlugins(File directory);
 
     /**
+     * Dispatches pending events in the async queue
+     *
+     * This method should be called regularly from the main server thread
+     *
+     * Fields in the event must be stable
+     *
+     */
+    public void dispatchPendingAsyncEvents();
+
+
+    /**
+     * Sends a player related event to the main thread and returns immediately
+     *
+     * Fields in the event must be stable
+     *
+     * @param type Type of player related event to call
+     * @param event Event details
+     * @param long Delay before dispatching event
+     */
+    public void callAsyncEvent(Event event, long Delay);
+
+    /**
+     * Sends a player related event to the main thread and returns immediately
+     *
+     * Fields in the event must be stable
+     *
+     * @param type Type of player related event to call
+     * @param event Event details
+     */
+    public void callAsyncEvent(Event event);
+
+    /**
      * Calls a player related event with the given details
      *
      * @param type Type of player related event to call

@@ -11,6 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.concurrent.Delayed;
+import java.util.concurrent.DelayQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -30,6 +33,7 @@ public final class SimplePluginManager implements PluginManager {
     private final List<Plugin> plugins = new ArrayList<Plugin>();
     private final Map<String, Plugin> lookupNames = new HashMap<String, Plugin>();
     private final Map<Event.Type, PriorityQueue<RegisteredListener>> listeners = new EnumMap<Event.Type, PriorityQueue<RegisteredListener>>(Event.Type.class);
+    private final DelayQueue<DelayedEvent> eventQueue = new DelayQueue<DelayedEvent>();
 
     public SimplePluginManager(Server instance) {
         server = instance;
@@ -180,6 +184,82 @@ public final class SimplePluginManager implements PluginManager {
         if (plugin.isEnabled()) {
             plugin.getPluginLoader().disablePlugin(plugin);
         }
+    }
+
+    /**
+     * Dispatches pending events in the async queue
+     *
+     * This method should be called regularly from the main server thread
+     *
+     * Fields in the event must be stable
+     *
+     */
+    public void dispatchPendingAsyncEvents() {
+        DelayedEvent firstEvent;
+        while((firstEvent = eventQueue.peek()) != null && firstEvent.getDelay(TimeUnit.MILLISECONDS) < 0L) {
+            DelayedEvent delayedEvent = eventQueue.poll();
+            if(delayedEvent != null) {
+                callEvent(delayedEvent.getEvent());
+            }
+        }
+    }
+
+    private class DelayedEvent implements Delayed {
+
+        private final Event event;
+        private final Long targetTime;
+
+        public DelayedEvent(long targetTime, Event event) {
+            this.targetTime = targetTime;
+            this.event = event;
+        }
+
+        public Event getEvent() {
+            return event;
+        }
+
+        public long getTargetTime() {
+            return targetTime;
+        }
+
+        public long getDelay(TimeUnit unit) {
+           long currentTime = System.currentTimeMillis();
+           long remaining = targetTime - currentTime;
+           return unit.convert(remaining, TimeUnit.MILLISECONDS);
+        }
+
+        @Override
+        public int compareTo(Delayed other) {
+            return (int)(targetTime - ((DelayedEvent)other).getTargetTime());
+        }
+    }
+
+
+    /**
+     * Sends a player related event to the main thread and returns immediately
+     *
+     * Fields in the event must be stable
+     *
+     * @param type Type of player related event to call
+     * @param event Event details
+     * @param long Delay before dispatching event
+     */
+    public void callAsyncEvent(Event event, long delay) {
+        Long targetTime = System.currentTimeMillis() + delay;
+        DelayedEvent delayedEvent = new DelayedEvent(targetTime, event);
+        eventQueue.offer(delayedEvent);
+    }
+
+    /**
+     * Sends a player related event to the main thread and returns immediately
+     *
+     * Fields in the event must be stable
+     *
+     * @param type Type of player related event to call
+     * @param event Event details
+     */
+    public void callAsyncEvent(Event event) {
+        callAsyncEvent(event, 100L);
     }
 
     /**
